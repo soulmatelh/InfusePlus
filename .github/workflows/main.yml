@@ -34,7 +34,7 @@ on:
         type: string
 
 concurrency:
-  group: ${{ workflow.name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -97,7 +97,6 @@ jobs:
       - name: 将插件注入 IPA 并重新打包
         run: cyan -i infuse.ipa -o ${{ env.FILE_BASE_NAME }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
 
-      # 新增：参考你的样例，自动生成唯一的 tag 和发布说明文件
       - name: 生成发布标签与描述
         id: tag
         run: |
@@ -115,7 +114,6 @@ jobs:
           echo "" >> release.txt
           echo "📥 **请下载下方的 \`.ipa\` 文件进行侧载安装。**" >> release.txt
 
-      # 修改：加入了 tag_name 和 body_path，并配置了 GITHUB_TOKEN
       - name: 上传至 GitHub Releases (正式发布)
         uses: softprops/action-gh-release@v2.0.1
         env:
