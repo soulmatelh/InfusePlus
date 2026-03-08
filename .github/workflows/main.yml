@@ -28,13 +28,13 @@ on:
         type: string
 
       app_version:
-        description: "用于生成文件名的 App 版本号。留空则默认文件名为 InfusePlus.ipa"
+        description: "用于生成文件名的 App 版本号 (例如：8.3.9)。留空则默认文件名为 InfusePlus.ipa"
         default: ""
         required: false
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ workflow.name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -97,10 +97,33 @@ jobs:
       - name: 将插件注入 IPA 并重新打包
         run: cyan -i infuse.ipa -o ${{ env.FILE_BASE_NAME }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
 
-      - name: 上传至 GitHub Releases
+      # 新增：参考你的样例，自动生成唯一的 tag 和发布说明文件
+      - name: 生成发布标签与描述
+        id: tag
+        run: |
+          # 获取当前时间作为 tag 的一部分，防止重复运行导致 tag 冲突
+          CURRENT_DATE=$(date +'%Y%m%d-%H%M')
+          echo "release_tag=${{ env.FILE_BASE_NAME }}-${CURRENT_DATE}" >> $GITHUB_OUTPUT
+          
+          # 创建 Release 页面显示的说明文本
+          touch release.txt
+          echo "### 🚀 Infuse Plus 自动注入成功" >> release.txt
+          echo "- **原始版本**: ${{ inputs.app_version || '未指定' }}" >> release.txt
+          echo "- **插件版本**: v${{ inputs.tweak_version }}" >> release.txt
+          echo "- **应用包名**: ${{ inputs.bundle_id }}" >> release.txt
+          echo "- **桌面名称**: ${{ inputs.display_name }}" >> release.txt
+          echo "" >> release.txt
+          echo "📥 **请下载下方的 \`.ipa\` 文件进行侧载安装。**" >> release.txt
+
+      # 修改：加入了 tag_name 和 body_path，并配置了 GITHUB_TOKEN
+      - name: 上传至 GitHub Releases (正式发布)
         uses: softprops/action-gh-release@v2.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: ${{ env.FILE_BASE_NAME }}
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
           files: ${{ env.FILE_BASE_NAME }}.ipa
           draft: false
 
