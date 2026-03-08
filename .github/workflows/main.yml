@@ -3,7 +3,6 @@ name: Create Infuse Plus app
 on:
   workflow_dispatch:
     inputs:
-
       ipa_url:
         description: "URL to the decrypted IPA file"
         default: ""
@@ -28,13 +27,20 @@ on:
         required: true
         type: string
 
+      # 新增：用于自定义生成文件名的版本号输入
+      app_version:
+        description: "App Version for filename (e.g., 8.3.9). Leave empty for default InfusePlus.ipa"
+        default: ""
+        required: false
+        type: string
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: 
+    name: Build Infuse Plus # 修复了此处为空的问题
     runs-on: macos-latest
     permissions:
       contents: write
@@ -49,7 +55,7 @@ jobs:
       - name: Hide sensitive inputs
         uses: levibostian/action-hide-sensitive-inputs@v1
         with:
-          exclude_inputs: display_name,tweak_version,bundle_id
+          exclude_inputs: display_name,tweak_version,bundle_id,app_version
 
       - name: Validate IPA URL
         run: |
@@ -80,14 +86,26 @@ jobs:
         id: download_infuse
         run: wget "${{ inputs.ipa_url }}" --no-verbose -O ${{ github.workspace }}/infuse.ipa
 
-      - name: Inject tweaks into IPA
-        run: cyan -i infuse.ipa -o InfusePlus_${{ inputs.tweak_version }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
+      # 新增：动态设置文件名的步骤
+      - name: Determine Output Filename
+        id: set_filename
+        run: |
+          if [ -z "${{ inputs.app_version }}" ]; then
+            echo "FILE_BASE_NAME=InfusePlus" >> $GITHUB_ENV
+          else
+            echo "FILE_BASE_NAME=InfusePlus-${{ inputs.app_version }}" >> $GITHUB_ENV
+          fi
 
+      # 修改：使用动态生成的文件名
+      - name: Inject tweaks into IPA
+        run: cyan -i infuse.ipa -o ${{ env.FILE_BASE_NAME }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
+
+      # 修改：Release 名字和上传的文件名保持一致
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2.0.1
         with:
-          name: InfusePlus v${{ inputs.tweak_version }} (${{ github.run_number }})
-          files: InfusePlus_${{ inputs.tweak_version }}.ipa
+          name: ${{ env.FILE_BASE_NAME }}
+          files: ${{ env.FILE_BASE_NAME }}.ipa
           draft: true
 
       - name: Output Release URL
