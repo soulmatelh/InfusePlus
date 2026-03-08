@@ -97,12 +97,12 @@ jobs:
       - name: 将插件注入 IPA 并重新打包
         run: cyan -i infuse.ipa -o ${{ env.FILE_BASE_NAME }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
 
-      - name: 上传至 GitHub Releases (草稿状态)
+      - name: 上传至 GitHub Releases
         uses: softprops/action-gh-release@v2.0.1
         with:
           name: ${{ env.FILE_BASE_NAME }}
           files: ${{ env.FILE_BASE_NAME }}.ipa
-          draft: true
+          draft: false
 
       - name: 输出 Release 发布地址
         run: |
