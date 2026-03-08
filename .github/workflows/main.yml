@@ -1,35 +1,34 @@
-name: Create Infuse Plus app
+name: 构建 Infuse Plus (修改版)
 
 on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "URL to the decrypted IPA file"
+        description: "已脱壳的 Infuse 原版 IPA 文件直链地址"
         default: ""
         required: true
         type: string
 
       tweak_version:
-        description: "The version of the tweak to use. Enter the version manually from dayanch96/InfusePlus/releases or leave default"
+        description: "要注入的 InfusePlus 插件版本号 (从 dayanch96/InfusePlus/releases 获取，或保持默认)"
         default: "2.5"
         required: true
         type: string
 
       display_name:
-        description: "App Name (Optional)"
+        description: "App 在桌面上显示的名称 (可选)"
         default: "Infuse"
         required: true
         type: string
 
       bundle_id:
-        description: "BundleID (Optional)"
+        description: "Bundle ID 包名 (可选，用于多开或自签)"
         default: "com.firecore.infuse"
         required: true
         type: string
 
-      # 新增：用于自定义生成文件名的版本号输入
       app_version:
-        description: "App Version for filename (e.g., 8.3.9). Leave empty for default InfusePlus.ipa"
+        description: "用于生成文件名的 App 版本号。留空则默认文件名为 InfusePlus.ipa"
         default: ""
         required: false
         type: string
@@ -40,54 +39,53 @@ concurrency:
 
 jobs:
   build:
-    name: Build Infuse Plus # 修复了此处为空的问题
+    name: 编译与注入 Infuse Plus
     runs-on: macos-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Main
+      - name: 检出主分支代码
         uses: actions/checkout@v4.1.1
         with:
           path: main
           submodules: recursive
 
-      - name: Hide sensitive inputs
+      - name: 隐藏敏感输入信息 (日志打码)
         uses: levibostian/action-hide-sensitive-inputs@v1
         with:
           exclude_inputs: display_name,tweak_version,bundle_id,app_version
 
-      - name: Validate IPA URL
+      - name: 验证 IPA 下载链接
         run: |
           curl -L -r 0-1023 -o sample.part "${{ inputs.ipa_url }}" > /dev/null 2>&1
           file_type=$(file --mime-type -b sample.part)
 
           if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
-            echo "::error::Validation failed: The file is not a valid IPA file. Detected type: $file_type."
+            echo "::error::验证失败：提供的链接不是有效的 IPA 文件。检测到的类型为: $file_type。"
             exit 1
           fi
 
-      - name: Install Dependencies
+      - name: 安装系统依赖环境
         run: brew install make ldid
 
-      - name: Set PATH environment variable
+      - name: 配置 PATH 环境变量
         run: echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
 
-      - name: Install cyan
+      - name: 安装 Cyan 注入工具
         run: pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
 
-      - name: Download Infuse Plus
+      - name: 下载 Infuse Plus 插件 (.deb)
         id: download_infp
         run: |
           deb_url="https://github.com/dayanch96/InfusePlus/releases/download/v${{ inputs.tweak_version }}/com.dvntm.infuseplus_${{ inputs.tweak_version }}_iphoneos-arm.deb"
           wget "$deb_url" --no-verbose -O ${{ github.workspace }}/infplus.deb
 
-      - name: Download Infuse
+      - name: 下载原版 Infuse 应用 (.ipa)
         id: download_infuse
         run: wget "${{ inputs.ipa_url }}" --no-verbose -O ${{ github.workspace }}/infuse.ipa
 
-      # 新增：动态设置文件名的步骤
-      - name: Determine Output Filename
+      - name: 确定最终生成的文件名
         id: set_filename
         run: |
           if [ -z "${{ inputs.app_version }}" ]; then
@@ -96,18 +94,16 @@ jobs:
             echo "FILE_BASE_NAME=InfusePlus-${{ inputs.app_version }}" >> $GITHUB_ENV
           fi
 
-      # 修改：使用动态生成的文件名
-      - name: Inject tweaks into IPA
+      - name: 将插件注入 IPA 并重新打包
         run: cyan -i infuse.ipa -o ${{ env.FILE_BASE_NAME }}.ipa -uwef infplus.deb -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
 
-      # 修改：Release 名字和上传的文件名保持一致
-      - name: Upload to GitHub Releases
+      - name: 上传至 GitHub Releases (草稿状态)
         uses: softprops/action-gh-release@v2.0.1
         with:
           name: ${{ env.FILE_BASE_NAME }}
           files: ${{ env.FILE_BASE_NAME }}.ipa
           draft: true
 
-      - name: Output Release URL
+      - name: 输出 Release 发布地址
         run: |
-          echo "::notice::Release available at: https://github.com/${{ github.repository }}/releases"
+          echo "::notice::构建完成！发布页面地址: https://github.com/${{ github.repository }}/releases"
